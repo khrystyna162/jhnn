@@ -1,0 +1,433 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OPERATOR
+  ADMIN
+  SYSADMIN
+}
+
+enum ScopeLevel {
+  ALL
+  COUNTRY
+  CITY
+  DISTRICT
+  BRANCH
+}
+
+enum WorkplaceStatus {
+  ACTIVE
+  PAUSED
+  INACTIVE
+}
+
+enum TicketStatus {
+  WAITING
+  CALLED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  REDIRECTED
+}
+
+enum NotificationChannel {
+  VIBER
+  SMS
+}
+
+enum DeliveryStatus {
+  NOT_SENT
+  SENT
+  FAILED
+}
+
+enum ShiftStatus {
+  OPEN
+  CLOSED
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  fullName     String
+  email        String?  @unique
+  phone        String?  @unique
+  passwordHash String
+  role         Role     @default(OPERATOR)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  permissions       UserPermission[]
+  scopes            UserScope[]
+  serviceAccess     UserServiceAccess[]
+  operatorShifts    OperatorShift[]
+  ticketsInProgress Ticket[]         @relation("TicketOperator")
+  ticketEvents      TicketEvent[]    @relation("TicketEventActor")
+  auditLogs         AuditLog[]
+  refreshTokens     RefreshToken[]
+
+  @@map("users")
+}
+
+model Permission {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+
+  userPermissions UserPermission[]
+
+  @@map("permissions")
+}
+
+model UserPermission {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  permissionId String   @db.Uuid
+  grantedAt    DateTime @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permissionId])
+  @@index([permissionId])
+  @@map("user_permissions")
+}
+
+model UserScope {
+  id         String     @id @default(uuid()) @db.Uuid
+  userId     String     @db.Uuid
+  level      ScopeLevel
+  countryId  String?    @db.Uuid
+  cityId     String?    @db.Uuid
+  districtId String?    @db.Uuid
+  branchId   String?    @db.Uuid
+  createdAt  DateTime   @default(now())
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  country  Country?  @relation(fields: [countryId], references: [id])
+  city     City?     @relation(fields: [cityId], references: [id])
+  district District? @relation(fields: [districtId], references: [id])
+  branch   Branch?   @relation(fields: [branchId], references: [id])
+
+  @@index([userId, level])
+  @@index([countryId])
+  @@index([cityId])
+  @@index([districtId])
+  @@index([branchId])
+  @@map("user_scopes")
+}
+
+model Country {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cities     City[]
+  branches   Branch[]
+  userScopes UserScope[]
+
+  @@map("countries")
+}
+
+model City {
+  id        String   @id @default(uuid()) @db.Uuid
+  countryId String   @db.Uuid
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  country    Country     @relation(fields: [countryId], references: [id], onDelete: Restrict)
+  districts  District[]
+  branches   Branch[]
+  userScopes UserScope[]
+
+  @@unique([countryId, name])
+  @@index([countryId])
+  @@map("cities")
+}
+
+model District {
+  id        String   @id @default(uuid()) @db.Uuid
+  cityId     String   @db.Uuid
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  city       City        @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  branches   Branch[]
+  userScopes UserScope[]
+
+  @@unique([cityId, name])
+  @@index([cityId])
+  @@map("districts")
+}
+
+model Branch {
+  id          String   @id @default(uuid()) @db.Uuid
+  countryId   String   @db.Uuid
+  cityId      String   @db.Uuid
+  districtId  String   @db.Uuid
+  code        String?  @unique
+  name        String
+  addressLine String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  country      Country      @relation(fields: [countryId], references: [id], onDelete: Restrict)
+  city         City         @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  district     District     @relation(fields: [districtId], references: [id], onDelete: Restrict)
+  workplaces   Workplace[]
+  tickets      Ticket[]
+  displaySetting DisplaySetting?
+  userScopes   UserScope[]
+
+  @@index([countryId])
+  @@index([cityId])
+  @@index([districtId])
+  @@map("branches")
+}
+
+model Workplace {
+  id        String          @id @default(uuid()) @db.Uuid
+  branchId  String          @db.Uuid
+  code      String?
+  name      String
+  status    WorkplaceStatus @default(ACTIVE)
+  isActive  Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  branch          Branch                 @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  shifts          OperatorShift[]
+  workplaceServices WorkplaceServiceType[]
+  tickets         Ticket[]               @relation("TicketWorkplace")
+
+  @@unique([branchId, name])
+  @@index([branchId, status])
+  @@map("workplaces")
+}
+
+model ServiceType {
+  id         String   @id @default(uuid()) @db.Uuid
+  code       String   @unique
+  name       String
+  prefix     String
+  slaMinutes Int?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  workplaceServices WorkplaceServiceType[]
+  userAccess        UserServiceAccess[]
+  ticketsCurrent    Ticket[] @relation("TicketCurrentService")
+  ticketsTarget     Ticket[] @relation("TicketTargetService")
+
+  @@unique([name, prefix])
+  @@map("service_types")
+}
+
+model WorkplaceServiceType {
+  id            String   @id @default(uuid()) @db.Uuid
+  workplaceId   String   @db.Uuid
+  serviceTypeId String   @db.Uuid
+  createdAt     DateTime @default(now())
+
+  workplace   Workplace   @relation(fields: [workplaceId], references: [id], onDelete: Cascade)
+  serviceType ServiceType @relation(fields: [serviceTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([workplaceId, serviceTypeId])
+  @@index([serviceTypeId])
+  @@map("workplace_service_types")
+}
+
+model UserServiceAccess {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @db.Uuid
+  serviceTypeId String   @db.Uuid
+  createdAt     DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  serviceType ServiceType @relation(fields: [serviceTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, serviceTypeId])
+  @@index([serviceTypeId])
+  @@map("user_service_access")
+}
+
+model OperatorShift {
+  id          String      @id @default(uuid()) @db.Uuid
+  userId      String      @db.Uuid
+  workplaceId String      @db.Uuid
+  status      ShiftStatus @default(OPEN)
+  startedAt   DateTime    @default(now())
+  endedAt     DateTime?
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  workplace Workplace @relation(fields: [workplaceId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status])
+  @@index([workplaceId, status])
+  @@map("operator_shifts")
+}
+
+model Ticket {
+  id                  String       @id @default(uuid()) @db.Uuid
+  number              String
+  ticketDateKey       String       @db.VarChar(10)
+  branchId            String       @db.Uuid
+  serviceTypeId       String       @db.Uuid
+  targetServiceTypeId String?      @db.Uuid
+  workplaceId         String?      @db.Uuid
+  operatorId          String?      @db.Uuid
+  phone               String
+  phoneMasked         String
+  clientName          String?
+  status              TicketStatus @default(WAITING)
+  createdAt           DateTime     @default(now())
+  calledAt            DateTime?
+  startedAt           DateTime?
+  completedAt         DateTime?
+  cancelledAt         DateTime?
+  cancelReason        String?
+  redirectReason      String?
+
+  branch            Branch      @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  currentService    ServiceType @relation("TicketCurrentService", fields: [serviceTypeId], references: [id], onDelete: Restrict)
+  targetService     ServiceType? @relation("TicketTargetService", fields: [targetServiceTypeId], references: [id], onDelete: Restrict)
+  workplace         Workplace?  @relation("TicketWorkplace", fields: [workplaceId], references: [id], onDelete: SetNull)
+  operator          User?       @relation("TicketOperator", fields: [operatorId], references: [id], onDelete: SetNull)
+  events            TicketEvent[]
+  notifications     Notification[]
+
+  @@unique([branchId, ticketDateKey, number])
+  @@index([branchId, ticketDateKey, status, createdAt])
+  @@index([serviceTypeId, status, createdAt])
+  @@index([operatorId, status])
+  @@index([workplaceId, status])
+  @@map("tickets")
+}
+
+model TicketEvent {
+  id         String       @id @default(uuid()) @db.Uuid
+  ticketId    String       @db.Uuid
+  actorId    String?      @db.Uuid
+  eventType  String
+  fromStatus TicketStatus?
+  toStatus   TicketStatus?
+  reason     String?
+  meta       Json?
+  createdAt  DateTime     @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  actor  User?  @relation("TicketEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId, createdAt])
+  @@index([actorId])
+  @@map("ticket_events")
+}
+
+model Notification {
+  id                String              @id @default(uuid()) @db.Uuid
+  ticketId          String              @db.Uuid
+  channel           NotificationChannel
+  status            DeliveryStatus      @default(NOT_SENT)
+  providerName      String?
+  providerMessageId String?
+  templateCode      String?
+  errorMessage      String?
+  sentAt            DateTime?
+  createdAt         DateTime            @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, channel])
+  @@index([status, createdAt])
+  @@map("notifications")
+}
+
+model NotificationTemplate {
+  id        String              @id @default(uuid()) @db.Uuid
+  code      String
+  channel   NotificationChannel
+  text      String
+  isActive  Boolean             @default(true)
+  version   Int                 @default(1)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  @@unique([code, channel, version])
+  @@index([code, channel])
+  @@map("notification_templates")
+}
+
+model DisplaySetting {
+  id          String   @id @default(uuid()) @db.Uuid
+  branchId    String   @unique @db.Uuid
+  layoutMode  String   @default("FHD")
+  ttsEnabled  Boolean  @default(true)
+  ttsVoice    String?
+  ttsRate     Float?   @default(1.0)
+  ttsVolume   Float?   @default(1.0)
+  mediaConfig Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@map("display_settings")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @db.Uuid
+  action     String
+  entityType String?
+  entityId   String?
+  meta       Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([action, createdAt])
+  @@index([actorId, createdAt])
+  @@map("audit_logs")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  tokenHash String   @unique
+  isRevoked Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model SystemSetting {
+  id        String   @id @default(uuid()) @db.Uuid
+  key       String   @unique
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}
