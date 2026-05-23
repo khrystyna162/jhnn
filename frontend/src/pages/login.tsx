@@ -104,6 +104,15 @@ export default function LoginPage() {
                   'Увійти'
                 )}
               </button>
+
+              <button
+                type="button"
+                className="btn btn-white w-full"
+                onClick={() => void router.push('/user-login')}
+                disabled={isLoading}
+              >
+                Вхід для звичайного користувача
+              </button>
             </form>
 
             {/* Footer */}

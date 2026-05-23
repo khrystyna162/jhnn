@@ -115,8 +115,8 @@ export const validatePhoneNumber = (phone: string): boolean => {
 };
 
 export const validateEmail = (email: string): boolean => {
-  const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
-  return emailRegex.test(email);
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email.trim());
 };
 
 export const formatCurrency = (amount: number, currency = 'UAH'): string => {

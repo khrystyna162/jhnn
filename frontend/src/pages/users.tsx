@@ -171,17 +171,12 @@ function UsersPage() {
 
   const handleCreateUser = async (data: any) => {
     try {
+      const fullName = [data.firstName, data.lastName].filter(Boolean).join(' ').trim();
       const newUser = await apiClient.createUser({
+        fullName,
         email: data.email,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        phoneNumber: data.phoneNumber,
-        roleId: data.roleId,
-        scopeLevel: data.scopeLevel,
-        countryId: data.countryId,
-        cityId: data.cityId,
-        districtId: data.districtId,
-        branchId: data.branchId,
+        phone: data.phoneNumber,
+        role: data.roleId,
       });
       setUsers([newUser, ...users]);
       setTotalUsers(totalUsers + 1);
@@ -196,16 +191,11 @@ function UsersPage() {
     if (!editingUser) return;
 
     try {
+      const fullName = [data.firstName, data.lastName].filter(Boolean).join(' ').trim();
       const updated = await apiClient.updateUser(editingUser.id, {
-        firstName: data.firstName,
-        lastName: data.lastName,
-        phoneNumber: data.phoneNumber,
-        roleId: data.roleId,
-        scopeLevel: data.scopeLevel,
-        countryId: data.countryId,
-        cityId: data.cityId,
-        districtId: data.districtId,
-        branchId: data.branchId,
+        fullName,
+        email: data.email,
+        phone: data.phoneNumber,
       });
       setUsers(users.map((u) => (u.id === updated.id ? updated : u)));
       setIsEditModalOpen(false);
@@ -226,9 +216,14 @@ function UsersPage() {
 
   const handleResetPassword = async (userId: string) => {
     try {
-      const tempPassword = Math.random().toString(36).slice(-8) + 'A1!';
-      await apiClient.resetUserPassword(userId, tempPassword);
-      show('Пароль відновлено. Тимчасовий пароль відправлений на email.', 'success');
+      const result = await apiClient.resetUserPassword(userId);
+      if (result.passwordEmailSent) {
+        show('Пароль відновлено і надіслано на email користувача.', 'success');
+      } else if (result.newPassword) {
+        show(`Пароль відновлено. Тимчасовий пароль: ${result.newPassword}`, 'success');
+      } else {
+        show('Пароль відновлено, але email не налаштовано.', 'warning');
+      }
     } catch (err) {
       show(`Помилка при відновленні пароля: ${err instanceof Error ? err.message : ''}`, 'error');
     }

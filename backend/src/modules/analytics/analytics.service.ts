@@ -100,8 +100,6 @@ export class AnalyticsService {
     const completedTickets = await this.prisma.ticket.findMany({
       where: this.buildCompletedWhere(filter),
       select: {
-        id: true,
-        number: true,
         createdAt: true,
         startedAt: true,
       },
@@ -109,44 +107,75 @@ export class AnalyticsService {
       take: 500,
     });
 
-    return {
-      items: completedTickets
-        .filter((ticket) => Boolean(ticket.startedAt))
-        .map((ticket) => ({
-          ticketId: ticket.id,
-          ticketNumber: ticket.number,
-          waitingSec: ticket.startedAt
-            ? Math.round((ticket.startedAt.getTime() - ticket.createdAt.getTime()) / 1000)
-            : null,
-        })),
-    };
+    const byHour = new Map<number, number[]>();
+
+    for (const ticket of completedTickets) {
+      if (!ticket.startedAt) {
+        continue;
+      }
+
+      const hour = ticket.createdAt.getHours();
+      const waitingSec = Math.round((ticket.startedAt.getTime() - ticket.createdAt.getTime()) / 1000);
+      const current = byHour.get(hour) ?? [];
+      current.push(waitingSec);
+      byHour.set(hour, current);
+    }
+
+    return Array.from(byHour.entries())
+      .map(([hour, values]) => ({
+        hour,
+        avgWaitingSeconds: this.avg(values),
+        ticketCount: values.length,
+      }))
+      .sort((a, b) => a.hour - b.hour);
   }
 
   async serviceTime(filter: AnalyticsFilter) {
     const completedTickets = await this.prisma.ticket.findMany({
       where: this.buildCompletedWhere(filter),
       select: {
-        id: true,
-        number: true,
+        serviceTypeId: true,
         startedAt: true,
         completedAt: true,
+        currentService: {
+          select: {
+            name: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
       take: 500,
     });
 
-    return {
-      items: completedTickets
-        .filter((ticket) => Boolean(ticket.startedAt && ticket.completedAt))
-        .map((ticket) => ({
-          ticketId: ticket.id,
-          ticketNumber: ticket.number,
-          serviceSec:
-            ticket.startedAt && ticket.completedAt
-              ? Math.round((ticket.completedAt.getTime() - ticket.startedAt.getTime()) / 1000)
-              : null,
-        })),
-    };
+    const perService = new Map<string, { serviceName: string; durations: number[] }>();
+
+    for (const ticket of completedTickets) {
+      if (!ticket.startedAt || !ticket.completedAt) {
+        continue;
+      }
+
+      const serviceId = ticket.serviceTypeId;
+      const durationSec = Math.round((ticket.completedAt.getTime() - ticket.startedAt.getTime()) / 1000);
+      const current = perService.get(serviceId) ?? {
+        serviceName: ticket.currentService?.name ?? serviceId,
+        durations: [] as number[],
+      };
+
+      current.durations.push(durationSec);
+      if (!current.serviceName && ticket.currentService?.name) {
+        current.serviceName = ticket.currentService.name;
+      }
+      perService.set(serviceId, current);
+    }
+
+    return Array.from(perService.entries())
+      .map(([serviceId, value]) => ({
+        serviceId,
+        serviceName: value.serviceName,
+        avgServiceSeconds: this.avg(value.durations),
+        ticketCount: value.durations.length,
+      }))
+      .sort((a, b) => b.avgServiceSeconds - a.avgServiceSeconds);
   }
 
   async operatorsRating(filter: AnalyticsFilter) {
@@ -156,29 +185,38 @@ export class AnalyticsService {
         operatorId: true,
         startedAt: true,
         completedAt: true,
+        operator: {
+          select: {
+            fullName: true,
+          },
+        },
       },
     });
 
-    const perOperator = new Map<string, number[]>();
+    const perOperator = new Map<string, { operatorName: string; durations: number[] }>();
 
     for (const ticket of completedTickets) {
       if (!ticket.operatorId || !ticket.startedAt || !ticket.completedAt) {
         continue;
       }
+
       const sec = (ticket.completedAt.getTime() - ticket.startedAt.getTime()) / 1000;
-      const current = perOperator.get(ticket.operatorId) ?? [];
-      current.push(sec);
+      const current = perOperator.get(ticket.operatorId) ?? {
+        operatorName: ticket.operator?.fullName ?? ticket.operatorId,
+        durations: [] as number[],
+      };
+      current.durations.push(sec);
       perOperator.set(ticket.operatorId, current);
     }
 
-    const items = Array.from(perOperator.entries())
-      .map(([operatorId, values]) => ({
+    return Array.from(perOperator.entries())
+      .map(([operatorId, value]) => ({
         operatorId,
-        avgServiceSec: this.avg(values),
+        operatorName: value.operatorName,
+        completed: value.durations.length,
+        avgServiceSeconds: this.avg(value.durations),
       }))
-      .sort((a, b) => a.avgServiceSec - b.avgServiceSec);
-
-    return { items };
+      .sort((a, b) => b.completed - a.completed);
   }
 
   async export(filter: AnalyticsFilter) {

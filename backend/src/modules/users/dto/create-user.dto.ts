@@ -3,6 +3,7 @@ import { IsEmail, IsEnum, IsOptional, IsString, MinLength } from 'class-validato
 export enum UserRoleDto {
   OPERATOR = 'OPERATOR',
   ADMIN = 'ADMIN',
+  SYSADMIN = 'SYSADMIN',
 }
 
 export class CreateUserDto {

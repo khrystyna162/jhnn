@@ -272,7 +272,7 @@ export function UserForm({ initialData, onSubmit, isLoading = false, isEditMode 
         >
           <option value="">Виберіть роль...</option>
           {roles.map((role) => (
-            <option key={role.id} value={role.id}>
+            <option key={role.id} value={role.value}>
               {role.name}
             </option>
           ))}

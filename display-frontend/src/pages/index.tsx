@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Head from 'next/head';
 import { BellRing, ClipboardList, Smartphone, Zap } from 'lucide-react';
-import { getPublicDisplayData, resolveTerminal } from '@/lib/api';
-import type { PublicDisplayData, PublicTicket, PublicWorkplace } from '@/types/public';
+import { getPublicDisplayData, resolveTerminal } from '../lib/api';
+import type { PublicDisplayData, PublicTicket, PublicWorkplace } from '../types/public';
 
 const POLL_INTERVAL_MS = 2000;
 const configuredBranchId = (process.env.NEXT_PUBLIC_DISPLAY_BRANCH_ID || '').trim();

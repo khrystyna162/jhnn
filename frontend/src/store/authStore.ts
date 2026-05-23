@@ -78,7 +78,27 @@ export const useAuthStore = create<AuthStore>()(
             error: null,
           });
         } catch (error) {
-          const message = error instanceof Error ? error.message : 'Login failed';
+          const axiosLike = error as {
+            response?: {
+              status?: number;
+              data?: { message?: string | string[] };
+            };
+          };
+
+          const serverMessage = axiosLike.response?.data?.message;
+          const normalizedServerMessage = Array.isArray(serverMessage)
+            ? serverMessage.join(', ')
+            : serverMessage;
+
+          let message =
+            normalizedServerMessage
+            || (error instanceof Error ? error.message : 'Не вдалося увійти');
+
+          if (axiosLike.response?.status === 401) {
+            message =
+              'Невірна пошта або пароль. Якщо акаунт щойно створений, попросіть адміністратора скинути пароль.';
+          }
+
           set({
             isLoading: false,
             error: message,

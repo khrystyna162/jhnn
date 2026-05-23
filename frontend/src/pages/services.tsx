@@ -214,7 +214,6 @@ function ServicesPage() {
         prefix: form.data.prefix,
         code: form.data.code || undefined,
         slaMinutes: form.data.slaMinutes ? Number(form.data.slaMinutes) : undefined,
-        isActive: form.data.isActive,
       });
       showToast('Послугу створено', 'success');
       await loadServices();

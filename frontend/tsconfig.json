@@ -17,32 +17,31 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "moduleResolution": "node",
-    "baseUrl": ".",
+    "moduleResolution": "bundler",
     "paths": {
       "@/*": [
-        "src/*"
+        "./src/*"
       ],
       "@/components/*": [
-        "src/components/*"
+        "./src/components/*"
       ],
       "@/pages/*": [
-        "src/pages/*"
+        "./src/pages/*"
       ],
       "@/services/*": [
-        "src/services/*"
+        "./src/services/*"
       ],
       "@/utils/*": [
-        "src/utils/*"
+        "./src/utils/*"
       ],
       "@/types/*": [
-        "src/types/*"
+        "./src/types/*"
       ],
       "@/hooks/*": [
-        "src/hooks/*"
+        "./src/hooks/*"
       ],
       "@/store/*": [
-        "src/store/*"
+        "./src/store/*"
       ]
     },
     "jsx": "preserve",
@@ -50,7 +49,8 @@
     "isolatedModules": true,
     "noEmit": true,
     "experimentalDecorators": true,
-    "allowJs": true
+    "allowJs": true,
+    "ignoreDeprecations": "5.0"
   },
   "include": [
     "next-env.d.ts",

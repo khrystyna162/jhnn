@@ -296,11 +296,11 @@ class ApiClient {
 
   async resetUserPassword(
     userId: string,
-    newPassword: string,
-  ): Promise<{ success: boolean }> {
-    const response = await this.client.post<{ success: boolean }>(
+    newPassword?: string,
+  ): Promise<{ success: boolean; passwordEmailSent?: boolean; newPassword?: string | null }> {
+    const response = await this.client.post<{ success: boolean; passwordEmailSent?: boolean; newPassword?: string | null }>(
       `/users/${userId}/reset-password`,
-      { newPassword },
+      newPassword ? { newPassword } : {},
     );
     return response.data;
   }
@@ -866,18 +866,56 @@ class ApiClient {
   // ─── Analytics Extended ───────────────────────────────────────────────────
 
   async getWaitingTime(params?: { from?: string; to?: string; branchId?: string }): Promise<WaitingTimeStats[]> {
-    const response = await this.client.get<WaitingTimeStats[]>('/analytics/waiting-time', { params });
-    return response.data;
+    const response = await this.client.get<WaitingTimeStats[] | { items?: Array<{ hour?: number; avgWaitingSeconds?: number; ticketCount?: number }> }>('/analytics/waiting-time', { params });
+    const rows = Array.isArray(response.data)
+      ? response.data
+      : Array.isArray(response.data?.items)
+        ? response.data.items
+        : [];
+
+    return rows.map((row) => ({
+      hour: Number((row as { hour?: number }).hour ?? 0),
+      avgWaitingSeconds: Number((row as { avgWaitingSeconds?: number }).avgWaitingSeconds ?? 0),
+      ticketCount: Number((row as { ticketCount?: number }).ticketCount ?? 0),
+    }));
   }
 
   async getServiceTime(params?: { from?: string; to?: string; branchId?: string }): Promise<ServiceTimeStats[]> {
-    const response = await this.client.get<ServiceTimeStats[]>('/analytics/service-time', { params });
-    return response.data;
+    const response = await this.client.get<ServiceTimeStats[] | { items?: Array<{ serviceId?: string; serviceName?: string; avgServiceSeconds?: number; ticketCount?: number; avgServiceSec?: number }> }>('/analytics/service-time', { params });
+    const rows = Array.isArray(response.data)
+      ? response.data
+      : Array.isArray(response.data?.items)
+        ? response.data.items
+        : [];
+
+    return rows.map((row, index) => {
+      const fallbackId = `service-${index}`;
+      return {
+        serviceId: String((row as { serviceId?: string }).serviceId ?? fallbackId),
+        serviceName: String((row as { serviceName?: string }).serviceName ?? 'Невідома послуга'),
+        avgServiceSeconds: Number((row as { avgServiceSeconds?: number; avgServiceSec?: number }).avgServiceSeconds ?? (row as { avgServiceSec?: number }).avgServiceSec ?? 0),
+        ticketCount: Number((row as { ticketCount?: number }).ticketCount ?? 0),
+      };
+    });
   }
 
   async getOperatorsRating(params?: { from?: string; to?: string; branchId?: string }): Promise<OperatorRating[]> {
-    const response = await this.client.get<OperatorRating[]>('/analytics/operators-rating', { params });
-    return response.data;
+    const response = await this.client.get<OperatorRating[] | { items?: Array<{ operatorId?: string; operatorName?: string; completed?: number; avgServiceSeconds?: number; avgServiceSec?: number }> }>('/analytics/operators-rating', { params });
+    const rows = Array.isArray(response.data)
+      ? response.data
+      : Array.isArray(response.data?.items)
+        ? response.data.items
+        : [];
+
+    return rows.map((row) => {
+      const operatorId = String((row as { operatorId?: string }).operatorId ?? 'unknown');
+      return {
+        operatorId,
+        operatorName: String((row as { operatorName?: string }).operatorName ?? operatorId),
+        completed: Number((row as { completed?: number }).completed ?? 0),
+        avgServiceSeconds: Number((row as { avgServiceSeconds?: number; avgServiceSec?: number }).avgServiceSeconds ?? (row as { avgServiceSec?: number }).avgServiceSec ?? 0),
+      };
+    });
   }
 }
 
